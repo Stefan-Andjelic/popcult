@@ -1,10 +1,11 @@
 from django.core.mail import send_mail
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db import DatabaseError
 from django.shortcuts import render, get_object_or_404
 from django.views.generic import ListView
 
-from .forms import EmailPostForm
-from .models import Post
+from .forms import EmailPostForm, CommentForm
+from .models import Post, Comment
 
 
 def post_list(request):
@@ -31,7 +32,26 @@ def post_detail(request, year, month, day, post):
                                 publish__year=year,
                                 publish__month=month,
                                 publish__day=day)
-    return render(request, 'blog/post/detail.html', {'post': post})
+    # List of active comments for this post
+    comments = post.comments.filter(active=True)
+    new_comment = None
+    if request.method == "POST":
+        comment_form = CommentForm(data=request.POST)
+        if comment_form.is_valid():
+            # Create comment object but do not save yet
+            new_comment = comment_form.save(commit=False)
+            # Assign current post to the comment
+            new_comment.post = post
+            # Save comment to the database
+            new_comment.save()
+
+    else:
+        comment_form = CommentForm()
+
+    return render(request, 'blog/post/detail.html', {'post': post,
+                                                     'comments': comments,
+                                                     'new_comment': new_comment,
+                                                     'comment_form': comment_form})
 
 
 class PostListView(ListView):
